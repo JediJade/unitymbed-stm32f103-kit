@@ -95,8 +95,9 @@ static void usb_force_reenumerate(void)
 }
 
 /*
- * Send a whole buffer. usb_cdc_write() takes at most one packet and refuses
- * while the previous one is still in flight, so wait for the endpoint - but
+ * Send a whole buffer. usb_cdc_write() takes at most one packet (63 bytes,
+ * and it says how many it took) and refuses while the previous one is still
+ * in flight, so wait for the endpoint and advance by what was accepted - but
  * give up if the host goes away, instead of hanging forever.
  */
 static void cdc_send(const uint8_t *data, uint16_t len)

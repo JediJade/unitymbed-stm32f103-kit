@@ -46,15 +46,18 @@ The API in your own code:
 ```c
 usb_cdc_init();
 if (usb_cdc_configured() && usb_cdc_write_ready()) {
-  usb_cdc_write((const uint8_t *)"hi\r\n", 4);   /* at most 64 bytes per call */
+  usb_cdc_write((const uint8_t *)"hi\r\n", 4);   /* at most 63 bytes per call */
 }
 uint8_t c;
 while (usb_cdc_read_byte(&c)) { /* ... */ }
 ```
 
-`usb_cdc_write()` returns 0 while the previous packet is still in flight, so
-use the `cdc_send()` helper in `main.c` for longer buffers - it waits for the
-endpoint and gives up after 100 ms if nothing on the PC is reading.
+`usb_cdc_write()` returns the number of bytes it took: 0 while the previous
+packet is still in flight, and never more than 63. The endpoint is 64 bytes,
+but a full-size packet does not end a bulk transfer, so the PC would hold it
+back until the next packet arrived. Use the `cdc_send()` helper in `main.c`
+for longer buffers - it advances by the returned count, waits for the
+endpoint, and gives up after 100 ms if nothing on the PC is reading.
 
 ## Status
 
@@ -63,3 +66,16 @@ hardware as a 12-command console (COM13, 17 of 17 host-side command checks
 passing). Here only its product and serial strings were changed. `main.c` is
 new. It builds with no warnings, but **this exact image has not been flashed
 yet.**
+
+Two bugs found in that project on 2026-11-10 are fixed here the same way:
+
+- **Lost `CTR_RX`.** Clearing `CTR_TX` wrote `CTR_RX` back as it had been
+  read, so an OUT packet completing in between was acknowledged to the PC and
+  never seen by the firmware; the bulk OUT endpoint then stayed at NAK and
+  every later write from the PC timed out. It needs traffic in both
+  directions at once, and hung within 3 seconds under it. After the fix,
+  106,704 overlapping requests were all answered.
+- **Full-size packet.** A reply of exactly 64 bytes arrived one request late.
+  With packets capped at 63 bytes, 615 such replies all arrived within 3 ms.
+
+Both figures were measured on the STM32FOC board, not with this image.

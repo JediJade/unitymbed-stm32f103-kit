@@ -55,6 +55,24 @@ you debugging a stale cached descriptor.
 Measured on hardware: enumerates as a keyboard (9-byte input report) plus a
 mouse (5-byte input report), and reports arrive every 10.0 ms.
 
+## Status
+
+**Builds with no warnings; the current image has not been flashed.** The
+measurements above were taken on a Blue Pill with the previous `src/usb.c`,
+and this template used to build to a `.bin` byte-identical to that project.
+That no longer holds: on 2026-11-10 `ep_clear_ctr_rx()` and
+`ep_clear_ctr_tx()` were changed so that clearing one `CTR` bit can no longer
+clear the other one unseen (see the comment above them, and point 1 below).
+The change is two OR-ed constants - the `.bin` went from 3272 to 3276 bytes -
+and the same fix was measured on hardware in the CDC driver derived from this
+file, but this image itself is unverified until someone flashes it.
+
+The second fix made to the CDC driver that day - never send a full-size bulk
+packet - has no counterpart here. EP1 is a 16-byte interrupt endpoint whose
+reports are 9 and 5 bytes, so every packet is already a short one, and the
+control endpoint already ends an exact-multiple-of-64 reply with a
+zero-length packet (`ctl_zlp` in `ctl_send()`).
+
 ## Demo pins
 
 - **PB0 → GND** (hold): pointer walks right for 25 reports, then back left
@@ -74,7 +92,10 @@ so every unrelated write has to put 1 there or you silently lose a completed
 transfer. A plain `EPR(0) = EP_RX_VALID;` looks right and does the wrong thing
 in two different ways. Both rules live in `ep_set_tx_status()` /
 `ep_set_rx_status()` in `src/usb.c` - nothing else should assign to `EPR()`
-except the initial configuration of a fresh endpoint.
+except the initial configuration of a fresh endpoint. The subtle case is
+clearing a `CTR` bit: `ep_clear_ctr_rx()` must write 1 to `CTR_TX`, not the
+value it just read, or a transfer that completes between the read and the
+write is lost. This file got that wrong until 2026-11-10.
 
 **2. PMA is not flat memory.** The 512-byte packet buffer is seen by the CPU
 as 16-bit words in 32-bit slots, so buffer offset `o` is at

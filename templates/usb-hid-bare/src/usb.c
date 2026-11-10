@@ -16,8 +16,10 @@
  *    toggle-write: the hardware XORs whatever you write into them, so to set
  *    a value you must write current ^ wanted. CTR_RX and CTR_TX are rc_w0:
  *    writing 0 clears them, so every other write must put 1 there or you lose
- *    an event. Both rules are handled by the ep_set_*_status() helpers; never
- *    assign to EPR() directly except when configuring a fresh endpoint.
+ *    an event - and that includes the write that clears the *other* CTR bit
+ *    (see ep_clear_ctr_rx()). Both rules are handled by the ep_set_*_status()
+ *    and ep_clear_ctr_*() helpers; never assign to EPR() directly except when
+ *    configuring a fresh endpoint.
  */
 
 #include "stm32f103xb.h"
@@ -72,14 +74,32 @@ static void ep_set_rx_status(uint8_t ep, uint16_t stat)
   EPR(ep) = (uint16_t)(v | USB_EP0R_CTR_RX | USB_EP0R_CTR_TX);
 }
 
+/*
+ * Clear one CTR bit and leave the other alone - which means writing 1 to the
+ * other, not writing back what was read.
+ *
+ * Both are rc_w0: writing 0 clears, writing 1 does nothing. These two used
+ * to write the other bit back as it was read. If that read said 0 and the
+ * transfer in the other direction finished before the write landed, the
+ * write cleared a CTR bit nobody had seen yet, and the handler for that
+ * transfer never ran.
+ *
+ * Here only EP0 carries traffic both ways (EP1 is IN only, its receiver is
+ * disabled), so the exposure is a control transfer: an IN completion being
+ * cleared just as the host's next OUT or SETUP on EP0 completes. That was
+ * never seen to fail in this project. It did fail in the CDC driver derived
+ * from this file, where a bulk OUT packet arriving during an IN completion
+ * left the endpoint at NAK for good (EP1R read 0x2021 with nothing
+ * received) - same two functions, so the same fix is applied here.
+ */
 static void ep_clear_ctr_rx(uint8_t ep)
 {
-  EPR(ep) = (uint16_t)(EPR(ep) & EP_KEEP_MASK & ~USB_EP0R_CTR_RX);
+  EPR(ep) = (uint16_t)((EPR(ep) & EP_KEEP_MASK & ~USB_EP0R_CTR_RX) | USB_EP0R_CTR_TX);
 }
 
 static void ep_clear_ctr_tx(uint8_t ep)
 {
-  EPR(ep) = (uint16_t)(EPR(ep) & EP_KEEP_MASK & ~USB_EP0R_CTR_TX);
+  EPR(ep) = (uint16_t)((EPR(ep) & EP_KEEP_MASK & ~USB_EP0R_CTR_TX) | USB_EP0R_CTR_RX);
 }
 
 /* COUNT_RX encoding: >62 bytes counts 32-byte blocks, otherwise 2-byte ones */

@@ -13,13 +13,16 @@ template also builds as a plain `make` project in Git Bash or Linux.
 | --- | --- | --- | --- | --- |
 | [`blink-bare`](templates/blink-bare) | PC13 LED blink, 72 MHz clock, SysTick | 0.5 KB | registers | builds; not yet flashed |
 | [`usb-cdc-bare`](templates/usb-cdc-bare) | USB virtual COM port, echo | 2.7 KB | registers | driver ran on hardware in another project; this image not yet flashed |
-| [`usb-hid-bare`](templates/usb-hid-bare) | USB keyboard + mouse | 3.2 KB | registers | **verified on hardware** |
+| [`usb-hid-bare`](templates/usb-hid-bare) | USB keyboard + mouse | 3.2 KB | registers | ran on hardware before the 2026-11-10 `usb.c` fix; current image not yet flashed |
 | [`usb-cdc-hal`](templates/usb-cdc-hal) | USB virtual COM port, streams ADC on PA0 | 22 KB | ST HAL + USB library | **verified on hardware** |
 | [`usb-hid-hal`](templates/usb-hid-hal) | USB keyboard + mouse | 16 KB | ST HAL + USB library | **verified on hardware** |
 
 "Verified on hardware" means the template builds to a `.bin` that is
 byte-identical to a project that was run on a Blue Pill (compared by sha256
-with the arm-none-eabi-gcc 14.2.1 that UnityMbed ships).
+with the arm-none-eabi-gcc 14.2.1 that UnityMbed ships). `usb-hid-bare` had
+that status until its USB driver was fixed (a lost-`CTR` race, also fixed in
+`usb-cdc-bare`); its image now differs from the one that was run - see its
+[README](templates/usb-hid-bare/README.md#status).
 
 Bare-metal templates use only the CMSIS and STM32F103 headers. The HAL
 templates carry the subset of ST's HAL, CMSIS-device and USB device library

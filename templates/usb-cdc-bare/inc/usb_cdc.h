@@ -27,8 +27,10 @@ void usb_cdc_init(void);
 /* 1 once the host has configured the device */
 int  usb_cdc_configured(void);
 
-/* Queue a byte range for transmission. Returns the number of bytes accepted,
-   which is 0 if the previous packet has not gone out yet. */
+/* Queue a byte range for transmission. Returns the number of bytes accepted:
+   0 if the previous packet has not gone out yet, and never more than 63 -
+   one short of the 64-byte endpoint, so that every packet ends its transfer
+   and the host delivers it at once. Loop on the return value for more. */
 uint16_t usb_cdc_write(const uint8_t *data, uint16_t len);
 
 /* Same, for a zero-terminated string. */

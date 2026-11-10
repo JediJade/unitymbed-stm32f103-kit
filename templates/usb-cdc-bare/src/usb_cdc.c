@@ -11,8 +11,9 @@
  * 2. USB_EPnR mixes toggle-write bits (STAT_RX, STAT_TX, DTOG_*) with rc_w0
  *    bits (CTR_RX, CTR_TX). Setting a status means writing current ^ wanted,
  *    and every write must put 1 in the CTR bits or a completed transfer is
- *    silently lost. Only ep_set_*_status() may touch EPnR, except when
- *    configuring a fresh endpoint.
+ *    silently lost - including the write that clears the other CTR bit, see
+ *    ep_clear_ctr_rx(). Only the ep_set_*_status() and ep_clear_ctr_*()
+ *    helpers may touch EPnR, except when configuring a fresh endpoint.
  *
  * 3. SET_ADDRESS must not take effect until after its status stage.
  */
@@ -75,14 +76,36 @@ static void ep_set_rx_status(uint8_t ep, uint16_t stat)
   EPR(ep) = (uint16_t)(v | USB_EP0R_CTR_RX | USB_EP0R_CTR_TX);
 }
 
+/*
+ * Clear one CTR bit and leave the other alone - which means writing 1 to the
+ * other, not writing back what was read.
+ *
+ * Both are rc_w0: writing 0 clears, writing 1 does nothing. These two used
+ * to write the other bit back as it was read. If that read said 0 and the
+ * transfer in the other direction finished before the write landed, the
+ * write cleared a CTR bit nobody had seen yet. For a lost CTR_RX on the bulk
+ * OUT endpoint that is the end of the endpoint: the hardware has already set
+ * it to NAK, the handler that would have taken the packet and let the
+ * application re-arm it never runs, and every later write from the host
+ * times out.
+ *
+ * It needs an OUT packet to complete inside the few cycles between the read
+ * and the write of an IN completion, so it wants traffic in both directions
+ * at once. An echo typed by hand almost never does that; a host sending a
+ * request while the previous reply is still going out does it within
+ * seconds. Caught on a board in the STM32FOC project, where this driver
+ * comes from: EP1R read 0x2021 - STAT_RX NAK, CTR_RX clear - with rx_len
+ * still 0. With the other bit forced to 1, 106,704 overlapping requests were
+ * all answered.
+ */
 static void ep_clear_ctr_rx(uint8_t ep)
 {
-  EPR(ep) = (uint16_t)(EPR(ep) & EP_KEEP_MASK & ~USB_EP0R_CTR_RX);
+  EPR(ep) = (uint16_t)((EPR(ep) & EP_KEEP_MASK & ~USB_EP0R_CTR_RX) | USB_EP0R_CTR_TX);
 }
 
 static void ep_clear_ctr_tx(uint8_t ep)
 {
-  EPR(ep) = (uint16_t)(EPR(ep) & EP_KEEP_MASK & ~USB_EP0R_CTR_TX);
+  EPR(ep) = (uint16_t)((EPR(ep) & EP_KEEP_MASK & ~USB_EP0R_CTR_TX) | USB_EP0R_CTR_RX);
 }
 
 static uint16_t rx_blocks(uint16_t size)
@@ -647,8 +670,24 @@ uint16_t usb_cdc_write(const uint8_t *data, uint16_t len)
   if ((configured == 0U) || (tx_busy != 0U)) {
     return 0U;
   }
-  if (len > BULK_SIZE) {
-    len = BULK_SIZE;
+  /*
+   * One byte short of a full packet, always.
+   *
+   * A bulk transfer ends at a packet shorter than the endpoint size. A
+   * packet of exactly 64 bytes says "more follows", and the host holds it
+   * back until whatever comes next - which for a device that answers one
+   * request at a time is the reply to the next request. In the STM32FOC
+   * console this driver comes from, a status line that happened to be 64
+   * characters long arrived one request late every time: the board had sent
+   * it, DTOG_TX had toggled, and the host application saw nothing. Capped
+   * at 63, 615 such replies all arrived within 3 ms.
+   *
+   * The other cure is a zero-length packet after each full one. Never
+   * sending a full one needs no state and no second interrupt. Callers
+   * already have to use the return value - see cdc_send() in main.c.
+   */
+  if (len > (BULK_SIZE - 1U)) {
+    len = BULK_SIZE - 1U;
   }
 
   tx_busy = 1U;

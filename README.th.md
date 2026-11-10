@@ -13,13 +13,17 @@ English: [README.md](README.md)
 | --- | --- | --- | --- | --- |
 | [`blink-bare`](templates/blink-bare) | กระพริบ LED PC13, clock 72 MHz, SysTick | 0.5 KB | register ตรง | build ผ่าน, ยังไม่ได้แฟลชลงบอร์ด |
 | [`usb-cdc-bare`](templates/usb-cdc-bare) | USB virtual COM port, ส่งกลับทุกตัวอักษร (echo) | 2.7 KB | register ตรง | ไดรเวอร์เคยรันบนบอร์ดจริงในอีกโปรเจกต์ แต่ image นี้ยังไม่ได้แฟลช |
-| [`usb-hid-bare`](templates/usb-hid-bare) | USB คีย์บอร์ด + เมาส์ | 3.2 KB | register ตรง | **ทดสอบบนบอร์ดจริงแล้ว** |
+| [`usb-hid-bare`](templates/usb-hid-bare) | USB คีย์บอร์ด + เมาส์ | 3.2 KB | register ตรง | เคยรันบนบอร์ดจริงก่อนแก้ `usb.c` เมื่อ 2026-11-10 แต่ image ปัจจุบันยังไม่ได้แฟลช |
 | [`usb-cdc-hal`](templates/usb-cdc-hal) | USB virtual COM port, ส่งค่า ADC จาก PA0 | 22 KB | ST HAL + USB library | **ทดสอบบนบอร์ดจริงแล้ว** |
 | [`usb-hid-hal`](templates/usb-hid-hal) | USB คีย์บอร์ด + เมาส์ | 16 KB | ST HAL + USB library | **ทดสอบบนบอร์ดจริงแล้ว** |
 
 "ทดสอบบนบอร์ดจริงแล้ว" หมายถึง template นั้น build ออกมาได้ไฟล์ `.bin`
 ที่ตรงกันทุกไบต์ (เทียบด้วย sha256) กับโปรเจกต์ที่เคยรันบน Blue Pill มาแล้ว
 โดยใช้ arm-none-eabi-gcc 14.2.1 ตัวเดียวกับที่มากับ UnityMbed
+`usb-hid-bare` เคยอยู่ในสถานะนี้ จนกระทั่งมีการแก้บั๊กในไดรเวอร์ USB
+(บิต `CTR` หายระหว่างอ่านกับเขียน register ซึ่งแก้ใน `usb-cdc-bare` ด้วย)
+image ที่ build ได้ตอนนี้จึงไม่ตรงกับตัวที่เคยรันแล้ว ดูรายละเอียดใน
+[README ของ template นั้น](templates/usb-hid-bare/README.md#status)
 
 template แบบ bare metal ใช้แค่ header ของ CMSIS กับ STM32F103 ส่วน template
 แบบ HAL มีเฉพาะไฟล์ของ ST HAL, CMSIS-device และ USB device library
