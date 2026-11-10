@@ -1,0 +1,8 @@
+# Keep LF in the working copy everywhere. A Makefile or shell fragment checked
+# out with CRLF breaks under make/sh on Windows (Git Bash, MSYS2).
+* text=auto eol=lf
+
+*.png  binary
+*.svg  text eol=lf
+*.bin  binary
+*.hex  text eol=lf

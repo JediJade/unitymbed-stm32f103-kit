@@ -1,0 +1,8 @@
+# build output
+build/
+
+# UnityMbed IDE session state (machine-specific)
+.unitymbed/
+
+*.bak
+*.unused
